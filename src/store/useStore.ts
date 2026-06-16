@@ -1,5 +1,22 @@
 import { create } from 'zustand'
-import { type ParentSettings, type NightRecord, loadSettings, saveSettings, loadRecords, saveRecords, getToday } from '@/data/storage'
+import {
+  type ParentSettings,
+  type NightRecord,
+  type SoundMix,
+  type CustomGuideTexts,
+  loadSettings,
+  saveSettings,
+  loadRecords,
+  saveRecords,
+  loadSoundMix,
+  saveSoundMix,
+  loadGuideTexts,
+  saveGuideTexts,
+  getToday,
+  getParentUnlocked,
+  setParentUnlocked,
+} from '@/data/storage'
+import { scenes, getSoundVolume } from '@/data/scenes'
 
 interface AppState {
   settings: ParentSettings
@@ -11,6 +28,9 @@ interface AppState {
   showParentPanel: boolean
   showStoryGuide: boolean
   currentGuideIndex: number
+  parentUnlocked: boolean
+  soundMix: SoundMix
+  customGuideTexts: CustomGuideTexts
 
   updateSettings: (s: Partial<ParentSettings>) => void
   selectScene: (id: string) => void
@@ -24,6 +44,15 @@ interface AppState {
   saveNightRecord: () => void
   updateMorningRecord: (date: string, liedDown: boolean, noCall: boolean) => void
   resetNight: () => void
+
+  unlockParent: () => boolean
+  lockParent: () => void
+
+  setSoundVolume: (sceneId: string, soundId: string, volume: number) => void
+  getSceneSoundVolumes: (sceneId: string) => { id: string; name: string; volume: number }[]
+
+  setGuideTexts: (sceneId: string, texts: string[]) => void
+  getGuideTexts: (sceneId: string) => string[]
 }
 
 export const useStore = create<AppState>((set, get) => ({
@@ -36,6 +65,9 @@ export const useStore = create<AppState>((set, get) => ({
   showParentPanel: false,
   showStoryGuide: false,
   currentGuideIndex: 0,
+  parentUnlocked: getParentUnlocked(),
+  soundMix: loadSoundMix(),
+  customGuideTexts: loadGuideTexts(),
 
   updateSettings: (partial) => {
     const next = { ...get().settings, ...partial, lastUpdated: getToday() }
@@ -100,4 +132,49 @@ export const useStore = create<AppState>((set, get) => ({
       showStoryGuide: false,
       currentGuideIndex: 0,
     }),
+
+  unlockParent: () => {
+    setParentUnlocked()
+    set({ parentUnlocked: true })
+    return true
+  },
+
+  lockParent: () => {
+    set({ parentUnlocked: false })
+  },
+
+  setSoundVolume: (sceneId, soundId, volume) => {
+    const { soundMix } = get()
+    const sceneMix = soundMix[sceneId] || {}
+    const nextSceneMix = { ...sceneMix, [soundId]: volume }
+    const nextMix = { ...soundMix, [sceneId]: nextSceneMix }
+    saveSoundMix(nextMix)
+    set({ soundMix: nextMix })
+  },
+
+  getSceneSoundVolumes: (sceneId) => {
+    const { soundMix } = get()
+    const scene = scenes.find((s) => s.id === sceneId)
+    if (!scene) return []
+    return scene.sounds.map((s) => ({
+      id: s.id,
+      name: s.name,
+      volume: getSoundVolume(sceneId, s.id, soundMix),
+    }))
+  },
+
+  setGuideTexts: (sceneId, texts) => {
+    const { customGuideTexts } = get()
+    const next = { ...customGuideTexts, [sceneId]: texts }
+    saveGuideTexts(next)
+    set({ customGuideTexts: next })
+  },
+
+  getGuideTexts: (sceneId) => {
+    const { customGuideTexts } = get()
+    const custom = customGuideTexts[sceneId]
+    if (custom && custom.length > 0) return custom
+    const scene = scenes.find((s) => s.id === sceneId)
+    return scene?.guideTexts || []
+  },
 }))

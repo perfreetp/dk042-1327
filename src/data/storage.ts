@@ -13,8 +13,21 @@ export interface ParentSettings {
   lastUpdated: string
 }
 
+export interface SoundMix {
+  [sceneId: string]: {
+    [soundId: string]: number
+  }
+}
+
+export interface CustomGuideTexts {
+  [sceneId: string]: string[]
+}
+
 const SETTINGS_KEY = 'goodnight_settings'
 const RECORDS_KEY = 'goodnight_records'
+const SOUND_MIX_KEY = 'goodnight_soundmix'
+const GUIDE_TEXTS_KEY = 'goodnight_guidetexts'
+const PARENT_UNLOCK_KEY = 'goodnight_parentunlock'
 
 export function loadSettings(): ParentSettings {
   try {
@@ -38,6 +51,45 @@ export function loadRecords(): NightRecord[] {
 
 export function saveRecords(records: NightRecord[]): void {
   localStorage.setItem(RECORDS_KEY, JSON.stringify(records))
+}
+
+export function loadSoundMix(): SoundMix {
+  try {
+    const raw = localStorage.getItem(SOUND_MIX_KEY)
+    if (raw) return JSON.parse(raw)
+  } catch {}
+  return {}
+}
+
+export function saveSoundMix(mix: SoundMix): void {
+  localStorage.setItem(SOUND_MIX_KEY, JSON.stringify(mix))
+}
+
+export function loadGuideTexts(): CustomGuideTexts {
+  try {
+    const raw = localStorage.getItem(GUIDE_TEXTS_KEY)
+    if (raw) return JSON.parse(raw)
+  } catch {}
+  return {}
+}
+
+export function saveGuideTexts(texts: CustomGuideTexts): void {
+  localStorage.setItem(GUIDE_TEXTS_KEY, JSON.stringify(texts))
+}
+
+export function getParentUnlocked(): boolean {
+  try {
+    const raw = localStorage.getItem(PARENT_UNLOCK_KEY)
+    if (raw) {
+      const data = JSON.parse(raw)
+      return data.date === getToday()
+    }
+  } catch {}
+  return false
+}
+
+export function setParentUnlocked(): void {
+  localStorage.setItem(PARENT_UNLOCK_KEY, JSON.stringify({ date: getToday() }))
 }
 
 export function getToday(): string {
@@ -77,4 +129,47 @@ export function getStreak(records: NightRecord[]): number {
     }
   }
   return streak
+}
+
+export function getMonthDays(year: number, month: number): string[] {
+  const days: string[] = []
+  const firstDay = new Date(year, month, 1)
+  const lastDay = new Date(year, month + 1, 0)
+  const startPadding = firstDay.getDay()
+  for (let i = 0; i < startPadding; i++) {
+    const d = new Date(year, month, -startPadding + i + 1)
+    days.push(d.toISOString().slice(0, 10))
+  }
+  for (let d = 1; d <= lastDay.getDate(); d++) {
+    const date = new Date(year, month, d)
+    days.push(date.toISOString().slice(0, 10))
+  }
+  const endPadding = 42 - days.length
+  for (let i = 1; i <= endPadding; i++) {
+    const d = new Date(year, month + 1, i)
+    days.push(d.toISOString().slice(0, 10))
+  }
+  return days
+}
+
+export function isCurrentMonth(dateStr: string, year: number, month: number): boolean {
+  const d = new Date(dateStr)
+  return d.getFullYear() === year && d.getMonth() === month
+}
+
+export function getConsecutiveStreakDays(records: NightRecord[], refDate: string): string[] {
+  const days: string[] = []
+  const ref = new Date(refDate + 'T00:00:00')
+  for (let i = 0; i < 365; i++) {
+    const d = new Date(ref)
+    d.setDate(d.getDate() - i)
+    const dateStr = d.toISOString().slice(0, 10)
+    const rec = records.find((r) => r.date === dateStr)
+    if (rec && rec.liedDownOnTime && rec.noCallOut) {
+      days.unshift(dateStr)
+    } else {
+      break
+    }
+  }
+  return days
 }

@@ -1,10 +1,16 @@
 type SoundType = 'wind' | 'whisper' | 'waves' | 'seagull' | 'crickets' | 'owl'
 
+interface SoundTrack {
+  source: AudioBufferSourceNode
+  gain: GainNode
+  type: SoundType
+  volume: number
+}
+
 class AudioEngine {
   private ctx: AudioContext | null = null
   private masterGain: GainNode | null = null
-  private sources: AudioBufferSourceNode[] = []
-  private gains: GainNode[] = []
+  private tracks: SoundTrack[] = []
   private fadeInterval: ReturnType<typeof setInterval> | null = null
 
   private getCtx(): AudioContext {
@@ -260,7 +266,7 @@ class AudioEngine {
     }
   }
 
-  play(sounds: SoundType[], maxVolume: number): void {
+  play(sounds: { type: SoundType; volume: number }[], masterVolume: number): void {
     this.stop()
 
     const ctx = this.getCtx()
@@ -270,36 +276,29 @@ class AudioEngine {
 
     this.masterGain = ctx.createGain()
     this.masterGain.gain.setValueAtTime(0, ctx.currentTime)
-    this.masterGain.gain.linearRampToValueAtTime(maxVolume, ctx.currentTime + 3)
+    this.masterGain.gain.linearRampToValueAtTime(masterVolume, ctx.currentTime + 3)
     this.masterGain.connect(ctx.destination)
 
-    this.sources = []
-    this.gains = []
+    this.tracks = []
 
-    for (const soundType of sounds) {
-      const { source, gain } = this.createSound(soundType)
+    for (const sound of sounds) {
+      const { source, gain } = this.createSound(sound.type)
+      gain.gain.value = sound.volume
       gain.connect(this.masterGain!)
       source.start()
-      this.sources.push(source)
-      this.gains.push(gain)
+      this.tracks.push({ source, gain, type: sound.type, volume: sound.volume })
     }
   }
 
-  pause(): void {
-    const ctx = this.getCtx()
-    if (ctx.state === 'running') {
-      ctx.suspend()
+  setTrackVolume(type: SoundType, volume: number): void {
+    const track = this.tracks.find((t) => t.type === type)
+    if (track) {
+      track.gain.gain.value = volume
+      track.volume = volume
     }
   }
 
-  resume(): void {
-    const ctx = this.getCtx()
-    if (ctx.state === 'suspended') {
-      ctx.resume()
-    }
-  }
-
-  setVolume(volume: number): void {
+  setMasterVolume(volume: number): void {
     if (!this.masterGain) return
     const ctx = this.getCtx()
     this.masterGain.gain.setValueAtTime(volume, ctx.currentTime)
@@ -323,19 +322,36 @@ class AudioEngine {
   }
 
   stop(): void {
-    for (const source of this.sources) {
-      try { source.stop() } catch {}
+    for (const track of this.tracks) {
+      try { track.source.stop() } catch {}
     }
-    this.sources = []
-    this.gains = []
+    this.tracks = []
     if (this.masterGain) {
       try { this.masterGain.disconnect() } catch {}
       this.masterGain = null
     }
+    if (this.fadeInterval) {
+      clearInterval(this.fadeInterval)
+      this.fadeInterval = null
+    }
+  }
+
+  pause(): void {
+    const ctx = this.getCtx()
+    if (ctx.state === 'running') {
+      ctx.suspend()
+    }
+  }
+
+  resume(): void {
+    const ctx = this.getCtx()
+    if (ctx.state === 'suspended') {
+      ctx.resume()
+    }
   }
 
   isRunning(): boolean {
-    return this.sources.length > 0
+    return this.tracks.length > 0
   }
 }
 

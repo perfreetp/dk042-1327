@@ -1,11 +1,11 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useEffect, useState, useRef, useCallback } from 'react'
-import { Pause, Play, Volume2, ChevronLeft } from 'lucide-react'
+import { Pause, Play, Volume2, ChevronLeft, VolumeX } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 import { getScene } from '@/data/scenes'
 import { stickers } from '@/data/stickers'
-import { audioEngine } from '@/utils/audioEngine'
+import { audioEngine, type SoundType } from '@/utils/audioEngine'
 
 function CloudBackground() {
   return (
@@ -118,23 +118,39 @@ export default function Player() {
   const selectedSticker = useStore((s) => s.selectedSticker)
   const selectSticker = useStore((s) => s.selectSticker)
   const saveNightRecord = useStore((s) => s.saveNightRecord)
+  const soundMix = useStore((s) => s.soundMix)
+  const setSoundVolume = useStore((s) => s.setSoundVolume)
+  const getGuideTexts = useStore((s) => s.getGuideTexts)
 
   const [volume, setVolume] = useState(settings.maxVolume)
   const [showStickerPicker, setShowStickerPicker] = useState(false)
   const [guideText, setGuideText] = useState<string | null>(null)
   const [selectedStickerEmoji, setSelectedStickerEmoji] = useState<string | null>(null)
+  const [showSoundMixer, setShowSoundMixer] = useState(false)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const guideIndexRef = useRef(0)
   const audioStartedRef = useRef(false)
+
+  const hasConfirmed = !!settings.lastUpdated
+
+  useEffect(() => {
+    if (!sceneId || !scene || hasConfirmed) return
+    navigate('/', { replace: true })
+  }, [sceneId, scene, hasConfirmed, navigate])
 
   const startPlayback = useCallback(() => {
     if (!scene) return
     const totalSeconds = settings.duration * 60
     setRemainingSeconds(totalSeconds)
     setPlaying(true)
-    audioEngine.play(scene.sounds as any[], settings.maxVolume)
+
+    const sounds = scene.sounds.map((s) => {
+      const vol = soundMix[scene.id]?.[s.id] ?? s.defaultVolume
+      return { type: s.id as SoundType, volume: vol }
+    })
+    audioEngine.play(sounds, settings.maxVolume)
     audioStartedRef.current = true
-  }, [scene, settings, setRemainingSeconds, setPlaying])
+  }, [scene, settings, soundMix, setRemainingSeconds, setPlaying])
 
   const resumePlayback = useCallback(() => {
     setPlaying(true)
@@ -148,10 +164,11 @@ export default function Player() {
   }, [setPlaying])
 
   useEffect(() => {
+    if (!hasConfirmed) return
     if (!audioStartedRef.current) {
       startPlayback()
     }
-  }, [startPlayback])
+  }, [startPlayback, hasConfirmed])
 
   useEffect(() => {
     if (!isPlaying) return
@@ -175,15 +192,17 @@ export default function Player() {
     }
   }, [remainingSeconds, isPlaying, setPlaying])
 
+  const guideTexts = getGuideTexts(scene?.id || '')
+
   useEffect(() => {
-    if (!scene || !isPlaying) return
+    if (!scene || !isPlaying || guideTexts.length === 0) return
     const interval = setInterval(() => {
-      guideIndexRef.current = (guideIndexRef.current + 1) % scene.guideTexts.length
-      setGuideText(scene.guideTexts[guideIndexRef.current])
+      guideIndexRef.current = (guideIndexRef.current + 1) % guideTexts.length
+      setGuideText(guideTexts[guideIndexRef.current])
       setTimeout(() => setGuideText(null), 4000)
     }, 45000)
     return () => clearInterval(interval)
-  }, [scene, isPlaying])
+  }, [scene, isPlaying, guideTexts])
 
   useEffect(() => {
     return () => {
@@ -208,7 +227,7 @@ export default function Player() {
   const handleVolumeChange = (v: number) => {
     const clamped = Math.min(v, settings.maxVolume)
     setVolume(clamped)
-    audioEngine.setVolume(clamped)
+    audioEngine.setMasterVolume(clamped)
   }
 
   const handleStickerSelect = (stickerId: string) => {
@@ -219,6 +238,12 @@ export default function Player() {
     saveNightRecord()
   }
 
+  const handleTrackVolumeChange = (soundId: string, vol: number) => {
+    if (!scene) return
+    setSoundVolume(scene.id, soundId, vol)
+    audioEngine.setTrackVolume(soundId as SoundType, vol)
+  }
+
   const handleBack = () => {
     audioEngine.stop()
     audioStartedRef.current = false
@@ -226,10 +251,10 @@ export default function Player() {
     navigate('/')
   }
 
-  if (!scene) {
+  if (!scene || !hasConfirmed) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#1a1a3e] text-white">
-        场景不存在
+        加载中...
       </div>
     )
   }
@@ -246,6 +271,13 @@ export default function Player() {
         className="fixed left-6 top-6 z-30 flex h-12 w-12 items-center justify-center rounded-full bg-white/10 text-white/60 backdrop-blur-sm transition-colors hover:bg-white/20"
       >
         <ChevronLeft className="h-6 w-6" />
+      </button>
+
+      <button
+        onClick={() => setShowSoundMixer(true)}
+        className="fixed right-6 top-6 z-30 flex h-12 w-12 items-center justify-center rounded-full bg-white/10 text-white/60 backdrop-blur-sm transition-colors hover:bg-white/20 hover:text-white"
+      >
+        <Volume2 className="h-5 w-5" />
       </button>
 
       <div className="relative z-10 flex flex-col items-center gap-6 px-6">
@@ -352,6 +384,79 @@ export default function Player() {
               ))}
             </div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showSoundMixer && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
+              onClick={() => setShowSoundMixer(false)}
+            />
+            <motion.div
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 220 }}
+              className="fixed bottom-0 left-0 right-0 z-40 rounded-t-3xl bg-slate-900/95 px-6 pb-8 pt-6 backdrop-blur-lg"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 className="mb-5 flex items-center gap-2 text-lg font-semibold text-white">
+                <Volume2 className="h-5 w-5 text-[#ffd97d]" />
+                声音调节
+              </h3>
+              <div className="space-y-4">
+                {scene.sounds.map((sound) => {
+                  const vol = soundMix[scene.id]?.[sound.id] ?? sound.defaultVolume
+                  const isMuted = vol === 0
+                  return (
+                    <div key={sound.id} className="flex items-center gap-3">
+                      <button
+                        onClick={() =>
+                          handleTrackVolumeChange(
+                            sound.id,
+                            isMuted ? sound.defaultVolume : 0
+                          )
+                        }
+                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/10 text-white/70 transition-colors hover:bg-white/20"
+                      >
+                        {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+                      </button>
+                      <div className="flex-1">
+                        <div className="mb-1 flex justify-between">
+                          <span className="text-sm text-white/80">{sound.name}</span>
+                          <span className="text-xs text-white/40">
+                            {Math.round(vol * 100)}%
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min={0}
+                          max={1}
+                          step={0.05}
+                          value={vol}
+                          onChange={(e) =>
+                            handleTrackVolumeChange(sound.id, parseFloat(e.target.value))
+                          }
+                          className="w-full"
+                        />
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+              <button
+                onClick={() => setShowSoundMixer(false)}
+                className="mt-6 min-h-[48px] w-full rounded-2xl bg-[#ffd97d] text-base font-bold text-slate-900 transition-opacity hover:opacity-90"
+              >
+                完成
+              </button>
+            </motion.div>
+          </>
         )}
       </AnimatePresence>
     </div>

@@ -1,12 +1,20 @@
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowLeft, Star, Check } from 'lucide-react'
+import { ArrowLeft, Star, Check, Calendar, LayoutGrid } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 import { scenes } from '@/data/scenes'
 import { getSticker } from '@/data/stickers'
-import { getLast7Days, getStreak, getYesterday, type NightRecord } from '@/data/storage'
+import {
+  getLast7Days,
+  getStreak,
+  getYesterday,
+  type NightRecord,
+} from '@/data/storage'
 import { useEffect, useState } from 'react'
 import StarField from '@/components/StarField'
+import MonthCalendar from '@/components/MonthCalendar'
+
+type ViewMode = 'week' | 'month'
 
 export default function Stickers() {
   const navigate = useNavigate()
@@ -17,8 +25,13 @@ export default function Stickers() {
   const yesterday = getYesterday()
   const yesterdayRecord = records.find((r) => r.date === yesterday)
 
-  const [liedDown, setLiedDown] = useState<boolean | null>(yesterdayRecord?.liedDownOnTime ?? null)
-  const [noCall, setNoCall] = useState<boolean | null>(yesterdayRecord?.noCallOut ?? null)
+  const [viewMode, setViewMode] = useState<ViewMode>('week')
+  const [liedDown, setLiedDown] = useState<boolean | null>(
+    yesterdayRecord?.liedDownOnTime ?? null
+  )
+  const [noCall, setNoCall] = useState<boolean | null>(
+    yesterdayRecord?.noCallOut ?? null
+  )
   const [showSaved, setShowSaved] = useState(false)
 
   useEffect(() => {
@@ -54,7 +67,10 @@ export default function Stickers() {
   const stickerEmoji = (id: string) => getSticker(id)?.emoji || '⭐'
   const streak = getStreak(records)
 
-  const needsMorningCheck = yesterdayRecord && (yesterdayRecord.liedDownOnTime === null || yesterdayRecord.noCallOut === null)
+  const needsMorningCheck =
+    yesterdayRecord &&
+    (yesterdayRecord.liedDownOnTime === null ||
+      yesterdayRecord.noCallOut === null)
 
   return (
     <div className="relative flex min-h-screen flex-col items-center overflow-hidden bg-gradient-to-b from-[#0a0a2e] via-[#1a1a3e] to-[#0d0d35]">
@@ -71,9 +87,12 @@ export default function Stickers() {
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.8 }}
-        className="relative z-10 mt-20 mb-8 text-center"
+        className="relative z-10 mt-20 mb-6 text-center"
       >
-        <h1 className="mb-2 text-3xl font-bold text-white" style={{ fontFamily: "'Caveat', cursive" }}>
+        <h1
+          className="mb-2 text-3xl font-bold text-white"
+          style={{ fontFamily: "'Caveat', cursive" }}
+        >
           我的贴纸墙
         </h1>
       </motion.div>
@@ -82,7 +101,7 @@ export default function Stickers() {
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ delay: 0.2 }}
-        className="relative z-10 mb-8 flex flex-col items-center rounded-3xl bg-white/5 px-8 py-6 backdrop-blur-sm"
+        className="relative z-10 mb-6 flex flex-col items-center rounded-3xl bg-white/5 px-8 py-6 backdrop-blur-sm"
       >
         <div className="flex items-center gap-2 text-[#ffd97d]">
           <Star className="h-6 w-6 fill-current" />
@@ -105,7 +124,9 @@ export default function Stickers() {
               initial={{ width: 0 }}
               animate={{ width: '1.5rem' }}
               transition={{ delay: 0.3 + i * 0.1 }}
-              className={`h-2 w-6 rounded-full transition-colors duration-500 ${i < streak ? 'bg-[#ffd97d]' : 'bg-white/10'}`}
+              className={`h-2 w-6 rounded-full transition-colors duration-500 ${
+                i < streak ? 'bg-[#ffd97d]' : 'bg-white/10'
+              }`}
             />
           ))}
         </div>
@@ -116,76 +137,84 @@ export default function Stickers() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
-          className="relative z-10 mb-8 w-full max-w-md rounded-3xl bg-white/5 px-6 py-6 backdrop-blur-sm"
+          className="relative z-10 mb-6 w-full max-w-md px-6"
         >
-          <h2 className="mb-4 text-center text-lg font-semibold text-white">昨晚睡得好吗？</h2>
-          <div className="mb-4 flex items-center gap-3 text-white/60">
-            <span className="text-2xl">{sceneIcon(yesterdayRecord!.sceneId)}</span>
-            <span className="text-sm">{stickerEmoji(yesterdayRecord!.stickerId)}</span>
-          </div>
-
-          <div className="space-y-4">
-            <div>
-              <p className="mb-2 text-sm text-white/70">按时躺好了吗？</p>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => handleLiedDownClick(true)}
-                  className={`relative flex-1 rounded-2xl py-3 text-base font-medium transition-colors ${
-                    liedDown === true
-                      ? 'bg-[#ffd97d] text-slate-900'
-                      : 'bg-white/10 text-white/60 hover:bg-white/15'
-                  }`}
-                >
-                  😊 躺好了
-                  {liedDown === true && (
-                    <Check className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2" />
-                  )}
-                </button>
-                <button
-                  onClick={() => handleLiedDownClick(false)}
-                  className={`relative flex-1 rounded-2xl py-3 text-base font-medium transition-colors ${
-                    liedDown === false
-                      ? 'bg-orange-400/80 text-slate-900'
-                      : 'bg-white/10 text-white/60 hover:bg-white/15'
-                  }`}
-                >
-                  😴 还没呢
-                  {liedDown === false && (
-                    <Check className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2" />
-                  )}
-                </button>
-              </div>
+          <div className="rounded-3xl bg-white/5 p-6 backdrop-blur-sm">
+            <h2 className="mb-4 text-center text-lg font-semibold text-white">
+              昨晚睡得好吗？
+            </h2>
+            <div className="mb-4 flex items-center gap-3 text-white/60">
+              <span className="text-2xl">
+                {sceneIcon(yesterdayRecord!.sceneId)}
+              </span>
+              <span className="text-sm">
+                {stickerEmoji(yesterdayRecord!.stickerId)}
+              </span>
             </div>
 
-            <div>
-              <p className="mb-2 text-sm text-white/70">中途有没有喊人？</p>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => handleNoCallClick(true)}
-                  className={`relative flex-1 rounded-2xl py-3 text-base font-medium transition-colors ${
-                    noCall === true
-                      ? 'bg-[#ffd97d] text-slate-900'
-                      : 'bg-white/10 text-white/60 hover:bg-white/15'
-                  }`}
-                >
-                  😊 没有哦
-                  {noCall === true && (
-                    <Check className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2" />
-                  )}
-                </button>
-                <button
-                  onClick={() => handleNoCallClick(false)}
-                  className={`relative flex-1 rounded-2xl py-3 text-base font-medium transition-colors ${
-                    noCall === false
-                      ? 'bg-orange-400/80 text-slate-900'
-                      : 'bg-white/10 text-white/60 hover:bg-white/15'
-                  }`}
-                >
-                  😴 喊了
-                  {noCall === false && (
-                    <Check className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2" />
-                  )}
-                </button>
+            <div className="space-y-4">
+              <div>
+                <p className="mb-2 text-sm text-white/70">按时躺好了吗？</p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => handleLiedDownClick(true)}
+                    className={`relative flex-1 rounded-2xl py-3 text-base font-medium transition-colors ${
+                      liedDown === true
+                        ? 'bg-[#ffd97d] text-slate-900'
+                        : 'bg-white/10 text-white/60 hover:bg-white/15'
+                    }`}
+                  >
+                    😊 躺好了
+                    {liedDown === true && (
+                      <Check className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2" />
+                    )}
+                  </button>
+                  <button
+                    onClick={() => handleLiedDownClick(false)}
+                    className={`relative flex-1 rounded-2xl py-3 text-base font-medium transition-colors ${
+                      liedDown === false
+                        ? 'bg-orange-400/80 text-slate-900'
+                        : 'bg-white/10 text-white/60 hover:bg-white/15'
+                    }`}
+                  >
+                    😴 还没呢
+                    {liedDown === false && (
+                      <Check className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2" />
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <p className="mb-2 text-sm text-white/70">中途有没有喊人？</p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => handleNoCallClick(true)}
+                    className={`relative flex-1 rounded-2xl py-3 text-base font-medium transition-colors ${
+                      noCall === true
+                        ? 'bg-[#ffd97d] text-slate-900'
+                        : 'bg-white/10 text-white/60 hover:bg-white/15'
+                    }`}
+                  >
+                    😊 没有哦
+                    {noCall === true && (
+                      <Check className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2" />
+                    )}
+                  </button>
+                  <button
+                    onClick={() => handleNoCallClick(false)}
+                    className={`relative flex-1 rounded-2xl py-3 text-base font-medium transition-colors ${
+                      noCall === false
+                        ? 'bg-orange-400/80 text-slate-900'
+                        : 'bg-white/10 text-white/60 hover:bg-white/15'
+                    }`}
+                  >
+                    😴 喊了
+                    {noCall === false && (
+                      <Check className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2" />
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -212,42 +241,88 @@ export default function Stickers() {
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.6 }}
+        transition={{ delay: 0.5 }}
+        className="relative z-10 mb-4 flex gap-1 rounded-2xl bg-white/5 p-1"
+      >
+        <button
+          onClick={() => setViewMode('week')}
+          className={`flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-medium transition-colors ${
+            viewMode === 'week'
+              ? 'bg-[#ffd97d]/10 text-[#ffd97d]'
+              : 'text-white/50 hover:text-white/70'
+          }`}
+        >
+          <LayoutGrid className="h-4 w-4" />
+          周视图
+        </button>
+        <button
+          onClick={() => setViewMode('month')}
+          className={`flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-medium transition-colors ${
+            viewMode === 'month'
+              ? 'bg-[#ffd97d]/10 text-[#ffd97d]'
+              : 'text-white/50 hover:text-white/70'
+          }`}
+        >
+          <Calendar className="h-4 w-4" />
+          月视图
+        </button>
+      </motion.div>
+
+      <motion.div
+        key={viewMode}
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
         className="relative z-10 w-full max-w-lg px-6 pb-12"
       >
-        <h2 className="mb-4 text-center text-lg font-semibold text-white/70">近 7 天</h2>
-        <div className="flex justify-between gap-2">
-          {last7.map((date) => {
-            const rec = getRecordForDay(date)
-            const isComplete = rec && rec.liedDownOnTime && rec.noCallOut
-            const dayLabel = new Date(date + 'T00:00:00').toLocaleDateString('zh-CN', { weekday: 'short' })
+        {viewMode === 'week' ? (
+          <div>
+            <h2 className="mb-4 text-center text-lg font-semibold text-white/70">
+              近 7 天
+            </h2>
+            <div className="flex justify-between gap-2">
+              {last7.map((date, idx) => {
+                const rec = getRecordForDay(date)
+                const isComplete = rec && rec.liedDownOnTime && rec.noCallOut
+                const dayLabel = new Date(date + 'T00:00:00').toLocaleDateString(
+                  'zh-CN',
+                  { weekday: 'short' }
+                )
 
-            return (
-              <motion.div
-                key={date}
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.7 + (last7.indexOf(date)) * 0.08 }}
-                className="flex flex-1 flex-col items-center gap-2 rounded-2xl bg-white/5 py-3"
-              >
-                <span className="text-xs text-white/40">{dayLabel}</span>
-                {rec ? (
-                  <>
-                    <span className="text-lg">{sceneIcon(rec.sceneId)}</span>
-                    <span className="text-sm">{stickerEmoji(rec.stickerId)}</span>
-                    {isComplete ? (
-                      <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.9 }}>
-                        <Star className="h-3 w-3 fill-[#ffd97d] text-[#ffd97d]" />
-                      </motion.div>
-                    ) : null}
-                  </>
-                ) : (
-                  <span className="text-lg text-white/10">—</span>
-                )}
-              </motion.div>
-            )
-          })}
-        </div>
+                return (
+                  <motion.div
+                    key={date}
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: 0.6 + idx * 0.08 }}
+                    className="flex flex-1 flex-col items-center gap-2 rounded-2xl bg-white/5 py-3"
+                  >
+                    <span className="text-xs text-white/40">{dayLabel}</span>
+                    {rec ? (
+                      <>
+                        <span className="text-lg">{sceneIcon(rec.sceneId)}</span>
+                        <span className="text-sm">{stickerEmoji(rec.stickerId)}</span>
+                        {isComplete ? (
+                          <motion.div
+                            initial={{ scale: 0 }}
+                            animate={{ scale: 1 }}
+                            transition={{ delay: 0.9 }}
+                          >
+                            <Star className="h-3 w-3 fill-[#ffd97d] text-[#ffd97d]" />
+                          </motion.div>
+                        ) : null}
+                      </>
+                    ) : (
+                      <span className="text-lg text-white/10">—</span>
+                    )}
+                  </motion.div>
+                )
+              })}
+            </div>
+          </div>
+        ) : (
+          <MonthCalendar records={records} />
+        )}
       </motion.div>
     </div>
   )

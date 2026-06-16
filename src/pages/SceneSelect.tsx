@@ -12,6 +12,7 @@ export default function SceneSelect() {
   const navigate = useNavigate()
   const selectScene = useStore((s) => s.selectScene)
   const settings = useStore((s) => s.settings)
+  const getGuideTexts = useStore((s) => s.getGuideTexts)
   const [showParent, setShowParent] = useState(false)
   const [guideScene, setGuideScene] = useState<string | null>(null)
 
@@ -122,7 +123,7 @@ export default function SceneSelect() {
       <ParentSettings open={showParent} onClose={() => setShowParent(false)} />
 
       {guideSceneData && (
-        <StoryGuide texts={guideSceneData.guideTexts} onComplete={handleGuideComplete} />
+        <StoryGuide texts={getGuideTexts(guideScene)} onComplete={handleGuideComplete} />
       )}
     </div>
   )
