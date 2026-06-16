@@ -121,6 +121,7 @@ export default function Player() {
   const soundMix = useStore((s) => s.soundMix)
   const setSoundVolume = useStore((s) => s.setSoundVolume)
   const getGuideTexts = useStore((s) => s.getGuideTexts)
+  const setPendingSceneId = useStore((s) => s.setPendingSceneId)
 
   const [volume, setVolume] = useState(settings.maxVolume)
   const [showStickerPicker, setShowStickerPicker] = useState(false)
@@ -135,8 +136,9 @@ export default function Player() {
 
   useEffect(() => {
     if (!sceneId || !scene || hasConfirmed) return
+    setPendingSceneId(sceneId)
     navigate('/', { replace: true })
-  }, [sceneId, scene, hasConfirmed, navigate])
+  }, [sceneId, scene, hasConfirmed, navigate, setPendingSceneId])
 
   const startPlayback = useCallback(() => {
     if (!scene) return

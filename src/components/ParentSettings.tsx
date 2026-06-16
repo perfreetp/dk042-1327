@@ -1,8 +1,9 @@
 import { motion, AnimatePresence } from 'framer-motion'
-import { Settings, X, Volume2, Clock, Music, MessageCircle, Lock, Unlock } from 'lucide-react'
+import { Settings, X, Volume2, Clock, Music, MessageCircle, Lock, Unlock, CalendarDays } from 'lucide-react'
 import { useState } from 'react'
 import { useStore } from '@/store/useStore'
 import { scenes } from '@/data/scenes'
+import { stickers } from '@/data/stickers'
 import ParentLock from '@/components/ParentLock'
 
 interface ParentSettingsProps {
@@ -10,7 +11,7 @@ interface ParentSettingsProps {
   onClose: () => void
 }
 
-type Tab = 'basic' | 'sound' | 'guide'
+type Tab = 'basic' | 'plan' | 'sound' | 'guide'
 
 export default function ParentSettings({ open, onClose }: ParentSettingsProps) {
   const settings = useStore((s) => s.settings)
@@ -21,6 +22,8 @@ export default function ParentSettings({ open, onClose }: ParentSettingsProps) {
   const setSoundVolume = useStore((s) => s.setSoundVolume)
   const customGuideTexts = useStore((s) => s.customGuideTexts)
   const setGuideTexts = useStore((s) => s.setGuideTexts)
+  const bedtimePlan = useStore((s) => s.bedtimePlan)
+  const updateBedtimePlan = useStore((s) => s.updateBedtimePlan)
 
   const [tab, setTab] = useState<Tab>('basic')
   const [showLock, setShowLock] = useState(false)
@@ -28,12 +31,6 @@ export default function ParentSettings({ open, onClose }: ParentSettingsProps) {
   const [guideTextsInput, setGuideTextsInput] = useState(customGuideTexts[activeScene]?.join('\n') || scenes[0].guideTexts.join('\n'))
 
   const durations = [15, 30, 45, 60]
-
-  const handleOpen = () => {
-    if (!parentUnlocked) {
-      setShowLock(true)
-    }
-  }
 
   const handleUnlockSuccess = () => {
     unlockParent()
@@ -70,6 +67,13 @@ export default function ParentSettings({ open, onClose }: ParentSettingsProps) {
     }
     return defaultVolume
   }
+
+  const tabs = [
+    { id: 'basic', label: '基础', icon: Clock },
+    { id: 'plan', label: '计划', icon: CalendarDays },
+    { id: 'sound', label: '声音', icon: Music },
+    { id: 'guide', label: '引导语', icon: MessageCircle },
+  ]
 
   return (
     <>
@@ -120,22 +124,18 @@ export default function ParentSettings({ open, onClose }: ParentSettingsProps) {
                     </button>
                   </div>
 
-                  <div className="flex gap-1 border-b border-white/10 px-4 py-2">
-                    {[
-                      { id: 'basic', label: '基础', icon: Clock },
-                      { id: 'sound', label: '声音', icon: Music },
-                      { id: 'guide', label: '引导语', icon: MessageCircle },
-                    ].map((t) => (
+                  <div className="flex gap-1 border-b border-white/10 px-3 py-2">
+                    {tabs.map((t) => (
                       <button
                         key={t.id}
                         onClick={() => setTab(t.id as Tab)}
-                        className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2.5 text-sm font-medium transition-colors ${
+                        className={`flex flex-1 items-center justify-center gap-1 rounded-xl py-2 text-xs font-medium transition-colors ${
                           tab === t.id
                             ? 'bg-[#ffd97d]/10 text-[#ffd97d]'
                             : 'text-slate-400 hover:text-white'
                         }`}
                       >
-                        <t.icon className="h-4 w-4" />
+                        <t.icon className="h-3.5 w-3.5" />
                         {t.label}
                       </button>
                     ))}
@@ -165,7 +165,6 @@ export default function ParentSettings({ open, onClose }: ParentSettingsProps) {
                             ))}
                           </div>
                         </div>
-
                         <div>
                           <label className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-300">
                             <Volume2 className="h-4 w-4" />
@@ -178,9 +177,7 @@ export default function ParentSettings({ open, onClose }: ParentSettingsProps) {
                               max={1}
                               step={0.05}
                               value={settings.maxVolume}
-                              onChange={(e) =>
-                                updateSettings({ maxVolume: parseFloat(e.target.value) })
-                              }
+                              onChange={(e) => updateSettings({ maxVolume: parseFloat(e.target.value) })}
                               className="flex-1"
                             />
                             <span className="w-16 text-right text-sm text-slate-400">
@@ -188,16 +185,127 @@ export default function ParentSettings({ open, onClose }: ParentSettingsProps) {
                             </span>
                           </div>
                         </div>
-
                         <div className="rounded-2xl bg-white/5 p-4">
                           <div className="mb-2 flex items-center gap-2 text-sm text-slate-400">
                             <Unlock className="h-4 w-4" />
                             <span>今日已解锁</span>
                           </div>
-                          <p className="text-xs text-slate-500">
-                            今日内无需再次验证，明天打开会自动重新锁定
-                          </p>
+                          <p className="text-xs text-slate-500">今日内无需再次验证，明天打开会自动重新锁定</p>
                         </div>
+                      </div>
+                    )}
+
+                    {tab === 'plan' && (
+                      <div className="space-y-6">
+                        <p className="text-sm text-slate-400">
+                          分别设置平日和周末的默认播放时长、音量和场景，晚上打开时自动套用，但也可以临时修改
+                        </p>
+                        {(['weekday', 'weekend'] as const).map((type) => {
+                          const plan = bedtimePlan[type]
+                          const label = type === 'weekday' ? '平日' : '周末'
+                          const icon = type === 'weekday' ? '📚' : '🎈'
+                          return (
+                            <div key={type} className="rounded-2xl bg-white/5 p-4">
+                              <div className="mb-4 flex items-center gap-2">
+                                <span className="text-xl">{icon}</span>
+                                <span className="font-semibold text-white">{label}</span>
+                              </div>
+                              <div className="space-y-4">
+                                <div>
+                                  <label className="mb-2 block text-xs text-slate-400">播放时长</label>
+                                  <div className="grid grid-cols-4 gap-1.5">
+                                    {durations.map((d) => (
+                                      <button
+                                        key={d}
+                                        onClick={() =>
+                                          updateBedtimePlan({
+                                            [type]: { ...plan, duration: d },
+                                          })
+                                        }
+                                        className={`min-h-[40px] rounded-lg text-xs font-semibold transition-colors ${
+                                          plan.duration === d
+                                            ? 'bg-[#ffd97d] text-slate-900'
+                                            : 'bg-white/10 text-white/60 hover:bg-white/15'
+                                        }`}
+                                      >
+                                        {d}分
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                                <div>
+                                  <label className="mb-2 block text-xs text-slate-400">最大音量</label>
+                                  <div className="flex items-center gap-3">
+                                    <input
+                                      type="range"
+                                      min={0.2}
+                                      max={1}
+                                      step={0.05}
+                                      value={plan.maxVolume}
+                                      onChange={(e) =>
+                                        updateBedtimePlan({
+                                          [type]: { ...plan, maxVolume: parseFloat(e.target.value) },
+                                        })
+                                      }
+                                      className="flex-1"
+                                    />
+                                    <span className="w-12 text-right text-xs text-slate-500">
+                                      {Math.round(plan.maxVolume * 100)}%
+                                    </span>
+                                  </div>
+                                </div>
+                                <div>
+                                  <label className="mb-2 block text-xs text-slate-400">默认场景</label>
+                                  <div className="flex gap-1.5">
+                                    <button
+                                      onClick={() => updateBedtimePlan({ [type]: { ...plan, defaultScene: '' } })}
+                                      className={`flex-1 rounded-lg py-2 text-xs font-medium transition-colors ${
+                                        !plan.defaultScene ? 'bg-[#ffd97d] text-slate-900' : 'bg-white/10 text-white/60'
+                                      }`}
+                                    >
+                                      不指定
+                                    </button>
+                                    {scenes.map((s) => (
+                                      <button
+                                        key={s.id}
+                                        onClick={() => updateBedtimePlan({ [type]: { ...plan, defaultScene: s.id } })}
+                                        className={`flex-1 rounded-lg py-2 text-xs transition-colors ${
+                                          plan.defaultScene === s.id ? 'bg-[#ffd97d] text-slate-900' : 'bg-white/10 text-white/60'
+                                        }`}
+                                      >
+                                        {s.icon}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                                <div>
+                                  <label className="mb-2 block text-xs text-slate-400">默认贴纸</label>
+                                  <div className="flex gap-1.5">
+                                    <button
+                                      onClick={() => updateBedtimePlan({ [type]: { ...plan, defaultSticker: '' } })}
+                                      className={`flex-1 rounded-lg py-2 text-xs font-medium transition-colors ${
+                                        !plan.defaultSticker ? 'bg-[#ffd97d] text-slate-900' : 'bg-white/10 text-white/60'
+                                      }`}
+                                    >
+                                      不指定
+                                    </button>
+                                    {stickers.map((st) => (
+                                      <button
+                                        key={st.id}
+                                        onClick={() => updateBedtimePlan({ [type]: { ...plan, defaultSticker: st.id } })}
+                                        className={`flex-1 rounded-lg py-2 text-xs transition-colors ${
+                                          plan.defaultSticker === st.id ? 'bg-[#ffd97d] text-slate-900' : 'bg-white/10 text-white/60'
+                                        }`}
+                                      >
+                                        {st.emoji}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )
+                        })}
                       </div>
                     )}
 
@@ -207,10 +315,7 @@ export default function ParentSettings({ open, onClose }: ParentSettingsProps) {
                           调整每个场景里不同声音的大小，改完会自动保存，下次还是这个效果
                         </p>
                         {scenes.map((scene) => (
-                          <div
-                            key={scene.id}
-                            className="rounded-2xl bg-white/5 p-4"
-                          >
+                          <div key={scene.id} className="rounded-2xl bg-white/5 p-4">
                             <div className="mb-4 flex items-center gap-3">
                               <span className="text-2xl">{scene.icon}</span>
                               <span className="font-semibold text-white">{scene.name}</span>
@@ -218,22 +323,14 @@ export default function ParentSettings({ open, onClose }: ParentSettingsProps) {
                             <div className="space-y-3">
                               {scene.sounds.map((sound) => (
                                 <div key={sound.id} className="flex items-center gap-3">
-                                  <span className="w-14 text-sm text-slate-400">
-                                    {sound.name}
-                                  </span>
+                                  <span className="w-14 text-sm text-slate-400">{sound.name}</span>
                                   <input
                                     type="range"
                                     min={0}
                                     max={1}
                                     step={0.05}
                                     value={getSoundVolume(scene.id, sound.id, sound.defaultVolume)}
-                                    onChange={(e) =>
-                                      handleSoundVolumeChange(
-                                        scene.id,
-                                        sound.id,
-                                        parseFloat(e.target.value)
-                                      )
-                                    }
+                                    onChange={(e) => handleSoundVolumeChange(scene.id, sound.id, parseFloat(e.target.value))}
                                     className="flex-1"
                                   />
                                   <span className="w-12 text-right text-xs text-slate-500">
@@ -268,9 +365,7 @@ export default function ParentSettings({ open, onClose }: ParentSettingsProps) {
                           ))}
                         </div>
                         <div className="rounded-2xl bg-white/5 p-4">
-                          <label className="mb-2 block text-sm font-medium text-slate-300">
-                            引导语（每行一句）
-                          </label>
+                          <label className="mb-2 block text-sm font-medium text-slate-300">引导语（每行一句）</label>
                           <textarea
                             value={guideTextsInput}
                             onChange={(e) => setGuideTextsInput(e.target.value)}
@@ -287,8 +382,7 @@ export default function ParentSettings({ open, onClose }: ParentSettingsProps) {
                         </div>
                         <div className="rounded-2xl bg-white/5 p-4">
                           <p className="text-xs text-slate-500">
-                            💡 小贴士：引导语会每隔 45 秒左右轻声出现一句，
-                            建议写 3-5 句就好，内容要简短柔和，不要太刺激孩子的注意力
+                            💡 小贴士：引导语会每隔 45 秒左右轻声出现一句，建议写 3-5 句就好，内容要简短柔和
                           </p>
                         </div>
                       </div>

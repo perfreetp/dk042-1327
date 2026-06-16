@@ -4,6 +4,7 @@ import {
   type NightRecord,
   type SoundMix,
   type CustomGuideTexts,
+  type BedtimePlan,
   loadSettings,
   saveSettings,
   loadRecords,
@@ -12,9 +13,12 @@ import {
   saveSoundMix,
   loadGuideTexts,
   saveGuideTexts,
+  loadBedtimePlan,
+  saveBedtimePlan,
   getToday,
   getParentUnlocked,
   setParentUnlocked,
+  isWeekend,
 } from '@/data/storage'
 import { scenes, getSoundVolume } from '@/data/scenes'
 
@@ -31,6 +35,8 @@ interface AppState {
   parentUnlocked: boolean
   soundMix: SoundMix
   customGuideTexts: CustomGuideTexts
+  bedtimePlan: BedtimePlan
+  pendingSceneId: string | null
 
   updateSettings: (s: Partial<ParentSettings>) => void
   selectScene: (id: string) => void
@@ -53,6 +59,11 @@ interface AppState {
 
   setGuideTexts: (sceneId: string, texts: string[]) => void
   getGuideTexts: (sceneId: string) => string[]
+
+  updateBedtimePlan: (plan: Partial<BedtimePlan>) => void
+  applyTodayPlan: () => void
+
+  setPendingSceneId: (id: string | null) => void
 }
 
 export const useStore = create<AppState>((set, get) => ({
@@ -68,6 +79,8 @@ export const useStore = create<AppState>((set, get) => ({
   parentUnlocked: getParentUnlocked(),
   soundMix: loadSoundMix(),
   customGuideTexts: loadGuideTexts(),
+  bedtimePlan: loadBedtimePlan(),
+  pendingSceneId: null,
 
   updateSettings: (partial) => {
     const next = { ...get().settings, ...partial, lastUpdated: getToday() }
@@ -131,6 +144,7 @@ export const useStore = create<AppState>((set, get) => ({
       remainingSeconds: 0,
       showStoryGuide: false,
       currentGuideIndex: 0,
+      pendingSceneId: null,
     }),
 
   unlockParent: () => {
@@ -177,4 +191,34 @@ export const useStore = create<AppState>((set, get) => ({
     const scene = scenes.find((s) => s.id === sceneId)
     return scene?.guideTexts || []
   },
+
+  updateBedtimePlan: (partial) => {
+    const { bedtimePlan } = get()
+    const next = { ...bedtimePlan, ...partial }
+    saveBedtimePlan(next)
+    set({ bedtimePlan: next })
+  },
+
+  applyTodayPlan: () => {
+    const { bedtimePlan } = get()
+    const plan = isWeekend() ? bedtimePlan.weekend : bedtimePlan.weekday
+    if (plan.duration && plan.maxVolume) {
+      const next = {
+        ...get().settings,
+        duration: plan.duration,
+        maxVolume: plan.maxVolume,
+        lastUpdated: getToday(),
+      }
+      saveSettings(next)
+      set({ settings: next })
+    }
+    if (plan.defaultScene) {
+      set({ selectedScene: plan.defaultScene })
+    }
+    if (plan.defaultSticker) {
+      set({ selectedSticker: plan.defaultSticker })
+    }
+  },
+
+  setPendingSceneId: (id) => set({ pendingSceneId: id }),
 }))

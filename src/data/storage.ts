@@ -23,11 +23,27 @@ export interface CustomGuideTexts {
   [sceneId: string]: string[]
 }
 
+export interface BedtimePlan {
+  weekday: {
+    duration: number
+    maxVolume: number
+    defaultScene: string
+    defaultSticker: string
+  }
+  weekend: {
+    duration: number
+    maxVolume: number
+    defaultScene: string
+    defaultSticker: string
+  }
+}
+
 const SETTINGS_KEY = 'goodnight_settings'
 const RECORDS_KEY = 'goodnight_records'
 const SOUND_MIX_KEY = 'goodnight_soundmix'
 const GUIDE_TEXTS_KEY = 'goodnight_guidetexts'
 const PARENT_UNLOCK_KEY = 'goodnight_parentunlock'
+const BEDTIME_PLAN_KEY = 'goodnight_bedtimeplan'
 
 export function loadSettings(): ParentSettings {
   try {
@@ -92,6 +108,21 @@ export function setParentUnlocked(): void {
   localStorage.setItem(PARENT_UNLOCK_KEY, JSON.stringify({ date: getToday() }))
 }
 
+export function loadBedtimePlan(): BedtimePlan {
+  try {
+    const raw = localStorage.getItem(BEDTIME_PLAN_KEY)
+    if (raw) return JSON.parse(raw)
+  } catch {}
+  return {
+    weekday: { duration: 30, maxVolume: 0.7, defaultScene: '', defaultSticker: '' },
+    weekend: { duration: 45, maxVolume: 0.7, defaultScene: '', defaultSticker: '' },
+  }
+}
+
+export function saveBedtimePlan(plan: BedtimePlan): void {
+  localStorage.setItem(BEDTIME_PLAN_KEY, JSON.stringify(plan))
+}
+
 export function getToday(): string {
   return new Date().toISOString().slice(0, 10)
 }
@@ -112,9 +143,16 @@ export function getLast7Days(): string[] {
   return days
 }
 
+export function isWeekend(dateStr?: string): boolean {
+  const d = dateStr ? new Date(dateStr + 'T00:00:00') : new Date()
+  const day = d.getDay()
+  return day === 0 || day === 6
+}
+
 export function getStreak(records: NightRecord[]): number {
   let streak = 0
   const today = new Date()
+  let started = false
   for (let i = 0; i < 365; i++) {
     const d = new Date(today)
     d.setDate(d.getDate() - i)
@@ -122,9 +160,10 @@ export function getStreak(records: NightRecord[]): number {
     const rec = records.find((r) => r.date === dateStr)
     if (rec && rec.liedDownOnTime && rec.noCallOut) {
       streak++
-    } else if (i === 0 && (!rec || rec.liedDownOnTime === null || rec.noCallOut === null)) {
+      started = true
+    } else if (!started && i === 0) {
       continue
-    } else {
+    } else if (started) {
       break
     }
   }
@@ -157,11 +196,29 @@ export function isCurrentMonth(dateStr: string, year: number, month: number): bo
   return d.getFullYear() === year && d.getMonth() === month
 }
 
-export function getConsecutiveStreakDays(records: NightRecord[], refDate: string): string[] {
+export function getConsecutiveStreakDays(records: NightRecord[]): string[] {
   const days: string[] = []
-  const ref = new Date(refDate + 'T00:00:00')
+  const today = new Date()
+  let startIdx = 0
   for (let i = 0; i < 365; i++) {
-    const d = new Date(ref)
+    const d = new Date(today)
+    d.setDate(d.getDate() - i)
+    const dateStr = d.toISOString().slice(0, 10)
+    const rec = records.find((r) => r.date === dateStr)
+    if (rec && rec.liedDownOnTime && rec.noCallOut) {
+      startIdx = i
+      break
+    }
+    if (i === 0 && (!rec || rec.liedDownOnTime === null || rec.noCallOut === null)) {
+      continue
+    }
+    if (!rec || !(rec.liedDownOnTime && rec.noCallOut)) {
+      startIdx = i
+      break
+    }
+  }
+  for (let i = startIdx; i < 365; i++) {
+    const d = new Date(today)
     d.setDate(d.getDate() - i)
     const dateStr = d.toISOString().slice(0, 10)
     const rec = records.find((r) => r.date === dateStr)
@@ -170,6 +227,80 @@ export function getConsecutiveStreakDays(records: NightRecord[], refDate: string
     } else {
       break
     }
+  }
+  return days
+}
+
+export interface SleepReport {
+  totalNights: number
+  completeNights: number
+  liedDownCount: number
+  noCallOutCount: number
+  sceneCounts: Record<string, number>
+  stickerCounts: Record<string, number>
+  streakChange: number
+  summary: string
+}
+
+export function generateSleepReport(records: NightRecord[], days: string[]): SleepReport {
+  const recs = days
+    .map((d) => records.find((r) => r.date === d))
+    .filter((r): r is NightRecord => !!r)
+
+  const totalNights = recs.length
+  const completeNights = recs.filter((r) => r.liedDownOnTime && r.noCallOut).length
+  const liedDownCount = recs.filter((r) => r.liedDownOnTime === true).length
+  const noCallOutCount = recs.filter((r) => r.noCallOut === true).length
+
+  const sceneCounts: Record<string, number> = {}
+  const stickerCounts: Record<string, number> = {}
+  for (const r of recs) {
+    sceneCounts[r.sceneId] = (sceneCounts[r.sceneId] || 0) + 1
+    stickerCounts[r.stickerId] = (stickerCounts[r.stickerId] || 0) + 1
+  }
+
+  const streakNow = getStreak(records)
+  const streakBefore = computeStreakBefore(records, days.length)
+  const streakChange = streakNow - streakBefore
+
+  let summary = ''
+  if (completeNights === totalNights && totalNights > 0) {
+    summary = '太棒了！每天都乖乖睡觉，真是一个小榜样！🌟'
+  } else if (completeNights >= totalNights * 0.7) {
+    summary = `大部分晚上都睡得很好呢，再努力一点点就能全满星啦！💪`
+  } else if (completeNights > 0) {
+    summary = `有${completeNights}天乖乖睡觉了，每天进步一点点！🌱`
+  } else if (totalNights > 0) {
+    summary = '新的一周开始啦，今晚试试早点躺下吧～🌙'
+  }
+
+  return { totalNights, completeNights, liedDownCount, noCallOutCount, sceneCounts, stickerCounts, streakChange, summary }
+}
+
+function computeStreakBefore(records: NightRecord[], offsetDays: number): number {
+  let streak = 0
+  const ref = new Date()
+  ref.setDate(ref.getDate() - offsetDays)
+  for (let i = 0; i < 365; i++) {
+    const d = new Date(ref)
+    d.setDate(d.getDate() - i)
+    const dateStr = d.toISOString().slice(0, 10)
+    const rec = records.find((r) => r.date === dateStr)
+    if (rec && rec.liedDownOnTime && rec.noCallOut) {
+      streak++
+    } else {
+      break
+    }
+  }
+  return streak
+}
+
+export function getMonthRange(year: number, month: number): string[] {
+  const days: string[] = []
+  const lastDay = new Date(year, month + 1, 0).getDate()
+  for (let d = 1; d <= lastDay; d++) {
+    const date = new Date(year, month, d)
+    days.push(date.toISOString().slice(0, 10))
   }
   return days
 }

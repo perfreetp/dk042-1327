@@ -1,16 +1,18 @@
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowLeft, Star, Check, Calendar, LayoutGrid } from 'lucide-react'
+import { ArrowLeft, Star, Check, Calendar, LayoutGrid, TrendingUp, TrendingDown, BarChart3 } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 import { scenes } from '@/data/scenes'
-import { getSticker } from '@/data/stickers'
+import { getSticker, stickers as allStickers } from '@/data/stickers'
 import {
   getLast7Days,
   getStreak,
   getYesterday,
+  getMonthRange,
+  generateSleepReport,
   type NightRecord,
 } from '@/data/storage'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import StarField from '@/components/StarField'
 import MonthCalendar from '@/components/MonthCalendar'
 
@@ -26,6 +28,9 @@ export default function Stickers() {
   const yesterdayRecord = records.find((r) => r.date === yesterday)
 
   const [viewMode, setViewMode] = useState<ViewMode>('week')
+  const [showReport, setShowReport] = useState(false)
+  const [calYear, setCalYear] = useState(new Date().getFullYear())
+  const [calMonth, setCalMonth] = useState(new Date().getMonth())
   const [liedDown, setLiedDown] = useState<boolean | null>(
     yesterdayRecord?.liedDownOnTime ?? null
   )
@@ -66,6 +71,18 @@ export default function Stickers() {
   const sceneIcon = (id: string) => scenes.find((s) => s.id === id)?.icon || '🌙'
   const stickerEmoji = (id: string) => getSticker(id)?.emoji || '⭐'
   const streak = getStreak(records)
+
+  const reportDays = useMemo(() => {
+    if (viewMode === 'week') return getLast7Days()
+    return getMonthRange(calYear, calMonth)
+  }, [viewMode, calYear, calMonth])
+
+  const report = useMemo(() => generateSleepReport(records, reportDays), [records, reportDays])
+
+  const handleCalMonthChange = (year: number, month: number) => {
+    setCalYear(year)
+    setCalMonth(month)
+  }
 
   const needsMorningCheck =
     yesterdayRecord &&
@@ -131,6 +148,120 @@ export default function Stickers() {
           ))}
         </div>
       </motion.div>
+
+      <motion.button
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.3 }}
+        onClick={() => setShowReport(!showReport)}
+        className="relative z-10 mb-4 flex items-center gap-2 rounded-2xl bg-white/5 px-5 py-3 text-sm text-[#ffd97d] backdrop-blur-sm transition-colors hover:bg-white/10"
+      >
+        <BarChart3 className="h-4 w-4" />
+        {showReport ? '收起回顾' : '睡眠小报告'}
+      </motion.button>
+
+      <AnimatePresence>
+        {showReport && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.3 }}
+            className="relative z-10 mb-6 w-full max-w-md overflow-hidden px-6"
+          >
+            <div className="rounded-3xl bg-white/5 p-5 backdrop-blur-sm">
+              <h3 className="mb-4 text-center text-base font-semibold text-white">
+                {viewMode === 'week' ? '本周' : '本月'}睡眠小报告
+              </h3>
+
+              <div className="mb-4 grid grid-cols-2 gap-3">
+                <div className="rounded-2xl bg-white/5 p-3 text-center">
+                  <p className="text-2xl font-bold text-white">{report.totalNights}</p>
+                  <p className="mt-1 text-xs text-white/40">播放晚数</p>
+                </div>
+                <div className="rounded-2xl bg-white/5 p-3 text-center">
+                  <p className="text-2xl font-bold text-[#ffd97d]">{report.completeNights}</p>
+                  <p className="mt-1 text-xs text-white/40">全部完成</p>
+                </div>
+                <div className="rounded-2xl bg-white/5 p-3 text-center">
+                  <p className="text-2xl font-bold text-emerald-400">{report.liedDownCount}</p>
+                  <p className="mt-1 text-xs text-white/40">按时躺好</p>
+                </div>
+                <div className="rounded-2xl bg-white/5 p-3 text-center">
+                  <p className="text-2xl font-bold text-sky-400">{report.noCallOutCount}</p>
+                  <p className="mt-1 text-xs text-white/40">没有喊人</p>
+                </div>
+              </div>
+
+              {report.totalNights > 0 && (
+                <div className="mb-4">
+                  <div className="mb-2 h-2 overflow-hidden rounded-full bg-white/10">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-[#ffd97d] to-amber-400 transition-all duration-500"
+                      style={{ width: `${(report.completeNights / report.totalNights) * 100}%` }}
+                    />
+                  </div>
+                  <p className="text-center text-xs text-white/40">
+                    完成率 {Math.round((report.completeNights / report.totalNights) * 100)}%
+                  </p>
+                </div>
+              )}
+
+              {Object.keys(report.sceneCounts).length > 0 && (
+                <div className="mb-3">
+                  <p className="mb-2 text-xs text-white/40">场景偏好</p>
+                  <div className="flex gap-2">
+                    {Object.entries(report.sceneCounts).map(([id, count]) => (
+                      <div key={id} className="flex items-center gap-1.5 rounded-xl bg-white/5 px-3 py-1.5">
+                        <span className="text-sm">{sceneIcon(id)}</span>
+                        <span className="text-xs text-white/70">{count}次</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {Object.keys(report.stickerCounts).length > 0 && (
+                <div className="mb-3">
+                  <p className="mb-2 text-xs text-white/40">贴纸偏好</p>
+                  <div className="flex gap-2">
+                    {Object.entries(report.stickerCounts).map(([id, count]) => (
+                      <div key={id} className="flex items-center gap-1.5 rounded-xl bg-white/5 px-3 py-1.5">
+                        <span className="text-sm">{stickerEmoji(id)}</span>
+                        <span className="text-xs text-white/70">{count}次</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {report.streakChange !== 0 && (
+                <div className="mb-3 flex items-center justify-center gap-2">
+                  {report.streakChange > 0 ? (
+                    <div className="flex items-center gap-1 text-emerald-400">
+                      <TrendingUp className="h-4 w-4" />
+                      <span className="text-sm">连续天数 +{report.streakChange}</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1 text-orange-400">
+                      <TrendingDown className="h-4 w-4" />
+                      <span className="text-sm">连续天数 {report.streakChange}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {report.summary && (
+                <div className="mt-4 rounded-2xl bg-[#ffd97d]/10 p-4 text-center">
+                  <p className="text-sm leading-relaxed text-[#ffd97d]/90" style={{ fontFamily: "'Caveat', cursive" }}>
+                    {report.summary}
+                  </p>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {needsMorningCheck && (
         <motion.div
@@ -321,7 +452,7 @@ export default function Stickers() {
             </div>
           </div>
         ) : (
-          <MonthCalendar records={records} />
+          <MonthCalendar records={records} year={calYear} month={calMonth} onMonthChange={handleCalMonthChange} />
         )}
       </motion.div>
     </div>

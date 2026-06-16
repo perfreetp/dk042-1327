@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Settings, BookOpen, Lock, ShieldCheck } from 'lucide-react'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useStore } from '@/store/useStore'
 import { scenes } from '@/data/scenes'
 import StarField from '@/components/StarField'
@@ -13,8 +13,12 @@ export default function SceneSelect() {
   const selectScene = useStore((s) => s.selectScene)
   const settings = useStore((s) => s.settings)
   const getGuideTexts = useStore((s) => s.getGuideTexts)
+  const pendingSceneId = useStore((s) => s.pendingSceneId)
+  const setPendingSceneId = useStore((s) => s.setPendingSceneId)
+  const applyTodayPlan = useStore((s) => s.applyTodayPlan)
   const [showParent, setShowParent] = useState(false)
   const [guideScene, setGuideScene] = useState<string | null>(null)
+  const confirmedRef = useRef(!!settings.lastUpdated)
 
   const hasConfirmed = !!settings.lastUpdated
 
@@ -23,6 +27,40 @@ export default function SceneSelect() {
       setShowParent(true)
     }
   }, [hasConfirmed])
+
+  useEffect(() => {
+    if (hasConfirmed && !confirmedRef.current) {
+      confirmedRef.current = true
+      applyTodayPlan()
+    }
+  }, [hasConfirmed, applyTodayPlan])
+
+  useEffect(() => {
+    if (hasConfirmed && pendingSceneId) {
+      const scene = scenes.find((s) => s.id === pendingSceneId)
+      if (scene) {
+        const id = pendingSceneId
+        setPendingSceneId(null)
+        selectScene(id)
+        setGuideScene(id)
+      } else {
+        setPendingSceneId(null)
+      }
+    }
+  }, [hasConfirmed, pendingSceneId, setPendingSceneId, selectScene])
+
+  const handleParentClose = () => {
+    setShowParent(false)
+    if (hasConfirmed && pendingSceneId) {
+      const scene = scenes.find((s) => s.id === pendingSceneId)
+      if (scene) {
+        const id = pendingSceneId
+        setPendingSceneId(null)
+        selectScene(id)
+        setGuideScene(id)
+      }
+    }
+  }
 
   const handleSceneClick = (sceneId: string) => {
     if (!hasConfirmed) {
@@ -120,7 +158,7 @@ export default function SceneSelect() {
         </motion.p>
       )}
 
-      <ParentSettings open={showParent} onClose={() => setShowParent(false)} />
+      <ParentSettings open={showParent} onClose={handleParentClose} />
 
       {guideSceneData && (
         <StoryGuide texts={getGuideTexts(guideScene)} onComplete={handleGuideComplete} />
