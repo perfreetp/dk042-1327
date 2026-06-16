@@ -285,6 +285,20 @@ class AudioEngine {
     }
   }
 
+  pause(): void {
+    const ctx = this.getCtx()
+    if (ctx.state === 'running') {
+      ctx.suspend()
+    }
+  }
+
+  resume(): void {
+    const ctx = this.getCtx()
+    if (ctx.state === 'suspended') {
+      ctx.resume()
+    }
+  }
+
   setVolume(volume: number): void {
     if (!this.masterGain) return
     const ctx = this.getCtx()

@@ -70,6 +70,8 @@ export function getStreak(records: NightRecord[]): number {
     const rec = records.find((r) => r.date === dateStr)
     if (rec && rec.liedDownOnTime && rec.noCallOut) {
       streak++
+    } else if (i === 0 && (!rec || rec.liedDownOnTime === null || rec.noCallOut === null)) {
+      continue
     } else {
       break
     }

@@ -125,6 +125,7 @@ export default function Player() {
   const [selectedStickerEmoji, setSelectedStickerEmoji] = useState<string | null>(null)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const guideIndexRef = useRef(0)
+  const audioStartedRef = useRef(false)
 
   const startPlayback = useCallback(() => {
     if (!scene) return
@@ -132,10 +133,24 @@ export default function Player() {
     setRemainingSeconds(totalSeconds)
     setPlaying(true)
     audioEngine.play(scene.sounds as any[], settings.maxVolume)
+    audioStartedRef.current = true
   }, [scene, settings, setRemainingSeconds, setPlaying])
 
+  const resumePlayback = useCallback(() => {
+    setPlaying(true)
+    audioEngine.resume()
+  }, [setPlaying])
+
+  const pausePlayback = useCallback(() => {
+    setPlaying(false)
+    audioEngine.pause()
+    if (timerRef.current) clearInterval(timerRef.current)
+  }, [setPlaying])
+
   useEffect(() => {
-    startPlayback()
+    if (!audioStartedRef.current) {
+      startPlayback()
+    }
   }, [startPlayback])
 
   useEffect(() => {
@@ -155,6 +170,7 @@ export default function Player() {
     if (remainingSeconds <= 0 && isPlaying) {
       setPlaying(false)
       audioEngine.stop()
+      audioStartedRef.current = false
       if (timerRef.current) clearInterval(timerRef.current)
     }
   }, [remainingSeconds, isPlaying, setPlaying])
@@ -172,17 +188,20 @@ export default function Player() {
   useEffect(() => {
     return () => {
       audioEngine.stop()
+      audioStartedRef.current = false
       setPlaying(false)
     }
   }, [setPlaying])
 
   const togglePlay = () => {
     if (isPlaying) {
-      audioEngine.stop()
-      setPlaying(false)
-      if (timerRef.current) clearInterval(timerRef.current)
+      pausePlayback()
     } else {
-      startPlayback()
+      if (audioStartedRef.current) {
+        resumePlayback()
+      } else {
+        startPlayback()
+      }
     }
   }
 
@@ -202,6 +221,7 @@ export default function Player() {
 
   const handleBack = () => {
     audioEngine.stop()
+    audioStartedRef.current = false
     setPlaying(false)
     navigate('/')
   }

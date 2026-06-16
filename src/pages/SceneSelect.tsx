@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Settings, BookOpen } from 'lucide-react'
-import { useState } from 'react'
+import { Settings, BookOpen, Lock, ShieldCheck } from 'lucide-react'
+import { useState, useEffect } from 'react'
 import { useStore } from '@/store/useStore'
 import { scenes } from '@/data/scenes'
 import StarField from '@/components/StarField'
@@ -15,7 +15,19 @@ export default function SceneSelect() {
   const [showParent, setShowParent] = useState(false)
   const [guideScene, setGuideScene] = useState<string | null>(null)
 
+  const hasConfirmed = !!settings.lastUpdated
+
+  useEffect(() => {
+    if (!hasConfirmed) {
+      setShowParent(true)
+    }
+  }, [hasConfirmed])
+
   const handleSceneClick = (sceneId: string) => {
+    if (!hasConfirmed) {
+      setShowParent(true)
+      return
+    }
     selectScene(sceneId)
     setGuideScene(sceneId)
   }
@@ -49,12 +61,19 @@ export default function SceneSelect() {
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 1.2, ease: 'easeOut' }}
-        className="relative z-10 mb-12 text-center"
+        className="relative z-10 mb-8 text-center"
       >
         <h1 className="mb-3 text-4xl font-bold text-white md:text-5xl" style={{ fontFamily: "'Caveat', cursive" }}>
           今晚去哪里睡觉？
         </h1>
-        <p className="text-lg text-white/50">选一个喜欢的地方，开始今晚的冒险吧</p>
+        {hasConfirmed ? (
+          <p className="text-lg text-white/50">选一个喜欢的地方，开始今晚的冒险吧</p>
+        ) : (
+          <div className="flex items-center justify-center gap-2 text-[#ffd97d]">
+            <ShieldCheck className="h-5 w-5" />
+            <p className="text-lg">请家长先完成设置</p>
+          </div>
+        )}
       </motion.div>
 
       <div className="relative z-10 flex flex-col gap-6 px-6 md:flex-row md:gap-8">
@@ -62,14 +81,20 @@ export default function SceneSelect() {
           <motion.button
             key={scene.id}
             initial={{ opacity: 0, y: 40 }}
-            animate={{ opacity: 1, y: 0 }}
+            animate={{ opacity: hasConfirmed ? 1 : 0.5, y: 0 }}
             transition={{ duration: 0.6, delay: 0.3 + i * 0.15, ease: 'easeOut' }}
-            whileHover={{ y: -8, scale: 1.03 }}
-            whileTap={{ scale: 0.97 }}
+            whileHover={hasConfirmed ? { y: -8, scale: 1.03 } : {}}
+            whileTap={hasConfirmed ? { scale: 0.97 } : {}}
             onClick={() => handleSceneClick(scene.id)}
-            className={`group relative flex min-h-[220px] w-[260px] flex-col items-center justify-center rounded-3xl bg-gradient-to-br ${scene.bgGradient} p-6 shadow-2xl transition-shadow duration-300 hover:shadow-[0_0_40px_rgba(255,217,125,0.2)]`}
+            disabled={!hasConfirmed}
+            className={`group relative flex min-h-[220px] w-[260px] flex-col items-center justify-center rounded-3xl bg-gradient-to-br ${scene.bgGradient} p-6 shadow-2xl transition-all duration-300 ${hasConfirmed ? 'hover:shadow-[0_0_40px_rgba(255,217,125,0.2)] cursor-pointer' : 'cursor-not-allowed'}`}
           >
             <div className="absolute inset-0 rounded-3xl border border-white/10" />
+            {!hasConfirmed && (
+              <div className="absolute inset-0 z-10 flex items-center justify-center rounded-3xl bg-black/30 backdrop-blur-[2px]">
+                <Lock className="h-8 w-8 text-white/50" />
+              </div>
+            )}
             <span className="mb-4 text-6xl drop-shadow-lg transition-transform duration-300 group-hover:scale-110">
               {scene.icon}
             </span>
@@ -83,7 +108,7 @@ export default function SceneSelect() {
         ))}
       </div>
 
-      {settings.lastUpdated && (
+      {hasConfirmed && (
         <motion.p
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
